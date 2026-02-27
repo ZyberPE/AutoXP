@@ -1,0 +1,10 @@
+name: AutoXP
+main: AutoXP\Main
+version: 1.0.0
+api: 5.0.0
+author: ZyberPE
+
+permissions:
+  xp.auto:
+    description: Receive XP directly instead of XP orbs
+    default: true
