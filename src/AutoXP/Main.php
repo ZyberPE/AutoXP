@@ -4,95 +4,90 @@ namespace AutoXP;
 
 use pocketmine\plugin\PluginBase;
 use pocketmine\event\Listener;
+use pocketmine\event\player\PlayerDeathEvent;
 use pocketmine\event\block\BlockBreakEvent;
 use pocketmine\event\entity\EntityDeathEvent;
 use pocketmine\event\entity\EntityDamageByEntityEvent;
 use pocketmine\player\Player;
-use pocketmine\entity\Living;
-use pocketmine\block\CoalOre;
-use pocketmine\block\IronOre;
-use pocketmine\block\GoldOre;
-use pocketmine\block\DiamondOre;
-use pocketmine\block\EmeraldOre;
-use pocketmine\block\LapisOre;
-use pocketmine\block\NetherQuartzOre;
 use pocketmine\world\sound\XpOrbPickupSound;
+use pocketmine\block\VanillaBlocks;
 
 class Main extends PluginBase implements Listener {
 
+    private array $xpBlocks;
+    private array $mobXp;
+    private array $configData;
+
     public function onEnable(): void {
         $this->saveDefaultConfig();
+        $this->configData = $this->getConfig()->getAll();
+        $this->xpBlocks = $this->configData["xp"]["ores"] ?? [];
+        $this->mobXp = $this->configData["mob-xp"] ?? [];
         $this->getServer()->getPluginManager()->registerEvents($this, $this);
     }
 
-    /* =============================
-       MINING XP
-    ============================== */
     public function onBlockBreak(BlockBreakEvent $event): void {
         $player = $event->getPlayer();
         $block = $event->getBlock();
-
-        $xpConfig = $this->getConfig()->get("xp.ores", []);
-
-        $xp = 0;
-
-        // Use instanceof for API 5 compatibility
-        if($block instanceof CoalOre) $xp = $xpConfig["coal"] ?? 1;
-        elseif($block instanceof IronOre) $xp = $xpConfig["iron"] ?? 2;
-        elseif($block instanceof GoldOre) $xp = $xpConfig["gold"] ?? 3;
-        elseif($block instanceof DiamondOre) $xp = $xpConfig["diamond"] ?? 5;
-        elseif($block instanceof EmeraldOre) $xp = $xpConfig["emerald"] ?? 5;
-        elseif($block instanceof LapisOre) $xp = $xpConfig["lapis"] ?? 3;
-        elseif($block instanceof NetherQuartzOre) $xp = $xpConfig["nether_quartz"] ?? 2;
-
+        $xp = $this->xpBlocks[$block->getType()->getName()] ?? 0;
         if($xp > 0){
             $player->addXp($xp);
-            $this->playXpSound($player);
+            if($this->configData["sound"]["enabled"] ?? false){
+                $player->getWorld()->addSound($player->getPosition(), new XpOrbPickupSound());
+            }
         }
     }
 
-    /* =============================
-       MOB & PLAYER DEATH
-    ============================== */
     public function onEntityDeath(EntityDeathEvent $event): void {
         $entity = $event->getEntity();
-        $cause = $entity->getLastDamageCause();
+        $lastDamage = $entity->getLastDamageCause();
+        $xp = $this->mobXp[$entity::class] ?? 0;
 
-        if(!$cause instanceof EntityDamageByEntityEvent) return;
+        if($entity instanceof Player) return; // Handled in PlayerDeathEvent
 
-        $damager = $cause->getDamager();
-
-        // -------- Player killed by another player --------
-        if($entity instanceof Player && $damager instanceof Player && $this->getConfig()->getNested("player-kill.enabled", true)){
-            $xp = $entity->getXp();
-            if($this->getConfig()->getNested("player-kill.transfer-all-xp", true)){
-                $damager->addXp($xp);
-                $this->playXpSound($damager);
-                $entity->setXp(0);
+        if($xp > 0){
+            $killer = null;
+            if($lastDamage instanceof EntityDamageByEntityEvent){
+                $killer = $lastDamage->getDamager();
             }
-        } 
-        // -------- Player killed by environment --------
-        elseif($entity instanceof Player){
-            if($this->getConfig()->getNested("death-xp.drop-on-ground", true)){
-                $entity->getWorld()->dropExperience($entity->getPosition(), $entity->getXp());
-                $entity->setXp(0);
+
+            if($killer instanceof Player){
+                $killer->addXp($xp);
+                if($this->configData["sound"]["enabled"] ?? false){
+                    $killer->getWorld()->addSound($killer->getPosition(), new XpOrbPickupSound());
+                }
+            } else {
+                $entity->getWorld()->dropExperience($entity->getPosition(), $xp);
             }
-        } 
-        // -------- Mob killed by player --------
-        elseif($damager instanceof Player && $entity instanceof Living){
-            $mobXpConfig = $this->getConfig()->get("mob-xp", []);
-            $mobName = strtolower($entity->getName());
-            $xp = $mobXpConfig[$mobName] ?? 2;
-            $damager->addXp($xp);
-            $this->playXpSound($damager);
         }
     }
 
-    /* =============================
-       XP SOUND
-    ============================== */
-    private function playXpSound(Player $player): void {
-        if(!$this->getConfig()->getNested("sound.enabled", true)) return;
-        $player->getWorld()->addSound($player->getPosition(), new XpOrbPickupSound());
+    public function onPlayerDeath(PlayerDeathEvent $event): void {
+        $player = $event->getPlayer();
+        $cause = $player->getLastDamageCause();
+        $xp = $player->getXp();
+
+        if($cause instanceof EntityDamageByEntityEvent){
+            $damager = $cause->getDamager();
+            if($damager instanceof Player){
+                $damager->addXp($xp);
+                $player->setXp(0);
+                if($this->configData["sound"]["enabled"] ?? false){
+                    $player->getWorld()->addSound($damager->getPosition(), new XpOrbPickupSound());
+                }
+            } else {
+                // Died by mob or TNT etc.
+                if($this->configData["death-xp"]["drop-on-ground"] ?? false){
+                    $player->getWorld()->dropExperience($player->getPosition(), $xp);
+                    $player->setXp(0);
+                }
+            }
+        } else {
+            // Environmental death (lava, void, fall, suffocation)
+            if($this->configData["death-xp"]["drop-on-ground"] ?? false){
+                $player->getWorld()->dropExperience($player->getPosition(), $xp);
+                $player->setXp(0);
+            }
+        }
     }
 }
