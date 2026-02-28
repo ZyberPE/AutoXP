@@ -1,10 +1,9 @@
 name: AutoXP
 main: AutoXP\Main
-version: 1.0.0
+version: 1.1.0
 api: 5.0.0
-author: ZyberPE
-
+author: zyberpe
+description: Auto XP system for mining, mobs, and player kills with sound feedback
 permissions:
-  xp.auto:
-    description: Receive XP directly instead of XP orbs
+  autoxp.receive:
     default: true
