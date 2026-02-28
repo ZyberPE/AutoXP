@@ -1,0 +1,36 @@
+# XP per mined block
+xp:
+  ores:
+    coal: 1
+    iron: 2
+    gold: 3
+    diamond: 5
+    emerald: 5
+    lapis: 3
+    nether_quartz: 2
+
+# XP per mob kill
+mob-xp:
+  zombie: 3
+  skeleton: 3
+  creeper: 5
+  spider: 2
+  enderman: 5
+  slime: 2
+  cow: 1
+  pig: 1
+  chicken: 1
+
+# Player kill XP behavior
+player-kill:
+  enabled: true
+  transfer-all-xp: true # XP goes to killer
+
+# XP drops on death
+death-xp:
+  drop-on-ground: true
+
+# XP sound
+sound:
+  enabled: true
+  type: "xp_orb_pickup"
